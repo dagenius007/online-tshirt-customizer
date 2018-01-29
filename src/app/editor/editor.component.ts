@@ -2,20 +2,33 @@ import { Component, OnInit } from '@angular/core';
 import {ColorPickerService} from 'angular2-color-picker';
 
 import 'fabric';
+import { element } from 'protractor';
 declare const fabric: any;
 
 @Component({
   selector: 'app-editor',
   templateUrl: './editor.component.html',
-  styleUrls: ['./editor.component.css']
+  styleUrls: ['./editor.component.scss']
 })
 
 export class EditorComponent implements OnInit {
 
+  // Name required variables
+  
   private canvas: any;
+
+  private currentface: string;
+
+  private previousface: string;
+  
+  private faces: any[] = [];
+
+  private doubled: string[] = [];
+
   private props: any = {
     canvasFill: '#ffffff',
     canvasImage: '',
+    shirtImage:[],
     id: null,
     opacity: null,
     fill: null,
@@ -26,15 +39,19 @@ export class EditorComponent implements OnInit {
     fontStyle: null,
     textAlign: null,
     fontFamily: null,
-    TextDecoration: ''
+    TextDecoration: '',
+    colors: ['#000' , 'red' ,'blue' , 'green' , 'yellow' ,'blue'],
+    dataURL: ''
   };
 
   private textString: string;
   private url: string = '';
   private size: any = {
     width: 500,
-    height: 800
+    height: 500,
   };
+
+  private num: number[] = Array(120).map( (x: number = 0 ) => { return this.num[x] = x + 1 ;});
 
   private json: any;
   private globalEditor: boolean = false;
@@ -58,15 +75,16 @@ export class EditorComponent implements OnInit {
       'object:moving': (e) => { },
       'object:modified': (e) => { },
       'object:selected': (e) => {
-
+       
         let selectedObject = e.target;
         this.selected = selectedObject
         selectedObject.hasRotatingPoint = true;
         selectedObject.transparentCorners = false;
+        
         // selectedObject.cornerColor = 'rgba(255, 87, 34, 0.7)';
 
         this.resetPanels();
-
+        
         if (selectedObject.type !== 'group' && selectedObject) {
 
           this.getId();
@@ -111,6 +129,27 @@ export class EditorComponent implements OnInit {
     // console.log(canvasElement)
     // });
 
+     let image1 = 'assets/img/shirt.png';
+
+     if (image1) {
+      fabric.Image.fromURL(image1, (image) => {
+        image.set({
+          left: 10,
+          top: 10,
+          angle: 0,
+          padding: 10,
+          cornersize: 10,
+          hasRotatingPoint: false
+        });
+        image.setWidth(200);
+        image.setHeight(200);
+        this.canvas.add(image);
+        this.extends(image,'false');
+        image.selectable = false; 
+        this.currentface = 'front';
+      });
+    }
+   
   }
 
   /*------------------------Block elements------------------------*/
@@ -163,37 +202,37 @@ export class EditorComponent implements OnInit {
       this.canvas.add(image);
       this.selectItemAfterAdded(image);
     });
-  }
+  } 
 
-  //Block "Upload Image"
-
-  addImageOnCanvas(url) {
-    if (url) {
-      fabric.Image.fromURL(url, (image) => {
-        image.set({
-          left: 10,
-          top: 10,
-          angle: 0,
-          padding: 10,
-          cornersize: 10,
-          hasRotatingPoint: true
-        });
-        image.setWidth(200);
-        image.setHeight(200);
-        this.extend(image, this.randomId());
-        this.canvas.add(image);
-        this.selectItemAfterAdded(image);
-      });
-    }
-  }
-
-  readUrl(event) {
+  addImageOnCanvas(event) {
+    let self = this;
     if (event.target.files && event.target.files[0]) {
       var reader = new FileReader();
       reader.onload = (event) => {
-        this.url = event.target['result'];
+        this.url = event.target['result']; 
       }
+      
       reader.readAsDataURL(event.target.files[0]);
+      
+      setTimeout(function(){
+
+          fabric.Image.fromURL(self.url, (image) => {
+            image.set({
+              left: 10,
+              top: 10,
+              angle: 0,
+              padding: 10,
+              cornersize: 10,
+              hasRotatingPoint: true
+            });
+            image.setWidth(200);
+            image.setHeight(200);
+            self.extend(image, self.randomId());
+            self.canvas.add(image);
+            self.selectItemAfterAdded(image);
+          });  
+       
+      },1000);
     }
   }
 
@@ -234,7 +273,7 @@ export class EditorComponent implements OnInit {
     this.selectItemAfterAdded(add);
   }
 
-  /*Canvas*/
+  /* ============  Canvas ============= */
 
   cleanSelect() {
     this.canvas.deactivateAllWithDispatch().renderAll();
@@ -257,6 +296,16 @@ export class EditorComponent implements OnInit {
       return function() {
         return fabric.util.object.extend(toObject.call(this), {
           id: id
+        });
+      };
+    })(obj.toObject);
+  }
+
+  extends(obj, value) {
+    obj.toObject = (function(toObject) {
+      return function() {
+        return fabric.util.object.extend(toObject.call(this), {
+          selectable: value
         });
       };
     })(obj.toObject);
@@ -382,6 +431,23 @@ export class EditorComponent implements OnInit {
     this.setActiveStyle('fill', this.props.fill, null);
   }
 
+  setFillText(index){
+    if(this.textEditor){
+      this.setActiveStyle('fill', this.props.colors[index], null);
+    }  
+  }
+
+  setFillShirt(index){
+    let shirt = this.canvas.getObjects();
+    
+    shirt[0].filters.push(new fabric.Image.filters.Tint({
+      color: this.props.colors[index],
+      opacity: 1
+    }));
+
+    shirt[0].applyFilters(this.canvas.renderAll.bind(this.canvas));
+  }
+  
   getLineHeight() {
     this.props.lineHeight = this.getActiveStyle('lineHeight', null);
   }
@@ -529,6 +595,7 @@ export class EditorComponent implements OnInit {
     }
     else {
       window.open(this.canvas.toDataURL('png'));
+      console.log('download');
     }
   }
 
@@ -541,11 +608,79 @@ export class EditorComponent implements OnInit {
 
   saveCanvasToJSON() {
     let json = JSON.stringify(this.canvas);
+    let jj = this.canvas.toJSON();
     localStorage.setItem('Kanvas', json);
     console.log('json');
     console.log(json);
-
   }
+
+  changeView(url , face){
+  
+    if(this.currentface == face) return ;
+
+    this.previousface = this.currentface;
+
+    this.currentface = face ;
+    
+    console.log(this.faces);
+
+    if (this.doubled.indexOf(this.previousface) != -1) {
+      this.faces.forEach((face) => {
+        if(this.previousface === Object.keys(face).toString()){
+           let position = this.faces.findIndex( (element) => {
+             return element == face;
+           })
+           this.faces.splice(position , 1);  
+        }
+      });
+      // this.faces.push({[this.previousface] : JSON.stringify(this.canvas)})
+      this.faces.push({[this.previousface] : this.canvas.toJSON()})
+    }
+     
+    else  this.faces.push({[this.previousface] : this.canvas.toJSON()});
+    
+    
+    
+    this.doubled = this.faces.map((face) => {
+      return Object.keys(face).toString();
+    })
+
+    if (this.doubled.indexOf(face) == -1){
+      this.canvas.clear();
+      if (url) {
+        fabric.Image.fromURL(url, (image) => {
+          image.set({
+            left: 10,
+            top: 10,
+            angle: 0,
+            padding: 10,
+            cornersize: 10,
+            hasRotatingPoint: false
+          });
+          image.setWidth(200);
+          image.setHeight(200);
+          this.canvas.add(image);
+          image.selectable = false;  
+        });
+      }
+
+    }
+    else{
+
+      let current = this.faces.find( (element) => {
+         if (Object.keys(element).toString() === this.currentface) return element[this.currentface];
+      });
+      
+      this.canvas.loadFromJSON(current[this.currentface] , this.canvas.renderAll.bind(this.canvas))
+    }  
+   
+  }
+
+
+  saveTopng(event){
+    this.props.dataURL = this.canvas.toDataURL("png");
+  }
+
 
   loadCanvasFromJSON() {
     let CANVAS = localStorage.getItem('Kanvas');
@@ -576,5 +711,4 @@ export class EditorComponent implements OnInit {
     this.imageEditor = false;
     this.figureEditor = false;
   }
-
 }
