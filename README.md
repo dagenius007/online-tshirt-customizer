@@ -1,4 +1,4 @@
-# angular-editor-fabric-js
+# custom-shirt-maker-with-angularcli
 
 ![](https://s1.gifgif.io/0qQV2a.gif)
 
